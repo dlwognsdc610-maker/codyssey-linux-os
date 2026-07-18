@@ -1,0 +1,35 @@
+## MEMORY_LIMIT=512 — 앱 자체 로그 (성장 → cleanup → 리셋 → 재성장)
+
+2026-07-18 01:49:37,530 [INFO] [MemoryWorker] Current Heap: 500MB
+2026-07-18 01:49:40,553 [INFO] [MemoryWorker] Current Heap: 525MB
+2026-07-18 01:49:40,553 [WARNING] [MemoryWorker] Memory Usage Reached Limit (525MB). Starting cleanup...
+2026-07-18 01:49:40,584 [INFO] [System] Memory Cache Flushed. Process Stabilized.
+>>> [SYSTEM] MEMORY RECOVERED (Cache Cleared) <<<
+2026-07-18 01:49:45,616 [INFO] [MemoryWorker] Current Heap: 25MB
+2026-07-18 01:49:48,641 [INFO] [MemoryWorker] Current Heap: 50MB
+...(재성장 반복)
+
+## 같은 순간, 실제 프로세스 RSS 실측 (/proc/<pid>/status VmRSS, 2초 간격 폴링)
+
+02:02:17.734  RSS=530524kB   ← 정점
+02:02:19.738  RSS=18444kB    ← 2초 만에 실측 RSS 폭락 (로그 문구가 아니라 커널 실측치)
+02:02:21.741  RSS=18444kB
+02:02:23.745  RSS=18444kB
+02:02:25.748  RSS=44044kB    ← 재성장 시작
+
+## 같은 cleanup 순간의 strace (memory 클래스: brk/mmap/munmap/madvise)
+
+101195 02:06:54.189840 mmap(NULL, 26218496, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7e34264ed000
+101195 02:06:54.198504 munmap(0x7e34264ed000, 26218496) = 0
+101195 02:06:54.199950 munmap(0x7e3427dee000, 26218496) = 0
+101195 02:06:54.200890 munmap(0x7e34296ef000, 26218496) = 0
+101195 02:06:54.201771 munmap(0x7e342aff0000, 26218496) = 0
+101195 02:06:54.202718 munmap(0x7e342c8f1000, 26218496) = 0
+... (총 20개, 각 26218496 bytes = 정확히 25.0MB)
+
+## 해석
+
+525MB(≈500MB 축적분)가 25MB 청크 20개로 나뉘어 개별 munmap된다 — madvise(DONTNEED)처럼
+매핑만 남기고 커밋을 취소하는 게 아니라, 가상주소 매핑 자체를 완전히 반납하는
+가장 강한 해제 방식이다. RSS가 2초 만에 530MB→18MB로 실측 폭락한 것과 정확히 일치 —
+이 cleanup은 로그 문구가 아니라 실제 OS 레벨 해제다.

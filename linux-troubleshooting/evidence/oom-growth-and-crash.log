@@ -1,0 +1,25 @@
+## MEMORY_LIMIT=100 (25MB 배수 정렬값) — 크래시
+
+2026-07-18 01:47:53,789 [INFO] [MemoryWorker] Current Heap: 25MB
+2026-07-18 01:47:56,811 [INFO] [MemoryWorker] Current Heap: 50MB
+2026-07-18 01:47:59,828 [INFO] [MemoryWorker] Current Heap: 75MB
+2026-07-18 01:48:02,851 [INFO] [MemoryWorker] Current Heap: 100MB
+2026-07-18 01:48:02,851 [CRITICAL] [MemoryGuard] Memory limit exceeded (100MB >= 100MB) / (Recommend Over 256MB)
+2026-07-18 01:48:02,851 [CRITICAL] [MemoryGuard] Self-terminating process 99451 to prevent system instability.
+
+## MEMORY_LIMIT=90 (비정렬값) — 같은 메커니즘 확인용
+
+2026-07-18 02:18:43,602 [INFO] [MemoryWorker] Current Heap: 25MB
+2026-07-18 02:18:46,625 [INFO] [MemoryWorker] Current Heap: 50MB
+2026-07-18 02:18:49,646 [INFO] [MemoryWorker] Current Heap: 75MB
+2026-07-18 02:18:52,669 [INFO] [MemoryWorker] Current Heap: 100MB
+2026-07-18 02:18:52,669 [CRITICAL] [MemoryGuard] Memory limit exceeded (100MB >= 90MB) / (Recommend Over 256MB)
+2026-07-18 02:18:52,670 [CRITICAL] [MemoryGuard] Self-terminating process 102085 to prevent system instability.
+
+## 해석
+
+두 케이스 모두 25MB 틱으로 성장하다 "heap >= MEMORY_LIMIT"이 되는 첫 틱에서 걸린다.
+90처럼 25의 배수가 아닌 값도 정확히 "다음 틱(100)"에서 걸려 — 이는 Healthy 시나리오의
+cleanup 트리거(§oom-healthy-cleanup.log, 512 한도인데 525에서 걸림)와 완전히 동일한
+비교 패턴이다. 즉 크래시 경로와 cleanup 경로는 같은 성장 루프·같은 `>=` 비교를 쓰고,
+시나리오 플래그에 따라 결과(청소 vs 자살)만 다르다.

@@ -1,0 +1,44 @@
+## 1) ps -eLf (스레드별 상태, PID=103179)
+
+ljh  103179  103177  103179  0  3  02:27 ?  00:00:00 ./agent-leak-app-x86
+ljh  103179  103177  103185  0  3  02:27 ?  00:00:00 ./agent-leak-app-x86
+ljh  103179  103177  103186  0  3  02:27 ?  00:00:00 ./agent-leak-app-x86
+
+## 2) /proc/<tid>/wchan — 커널이 보고하는 "지금 어느 커널 함수에 멈춰있는가" (조작 불가)
+
+최초 확인:
+TID 103179  State=S (sleeping)  wchan=futex_do_wait
+TID 103185  State=S (sleeping)  wchan=futex_do_wait
+TID 103186  State=S (sleeping)  wchan=futex_do_wait
+
+8초 뒤 재확인 (동일):
+TID 103179  State=S (sleeping)  wchan=futex_do_wait
+TID 103185  State=S (sleeping)  wchan=futex_do_wait
+TID 103186  State=S (sleeping)  wchan=futex_do_wait
+
+## 3) sleep()이 아님을 구분하는 근거
+
+Python time.sleep()은 futex가 아니라 nanosleep/clock_nanosleep 계열 syscall을 쓴다 —
+wchan도 hrtimer_nanosleep 등으로 다르게 찍힌다. 여기서 관측된 futex_do_wait는
+sleep이 아니라 futex 기반 동기화 프리미티브(pthread mutex/Python threading.Lock 등)
+에서만 나오는 값이다.
+
+## 4) "진짜로 서로 다른 락 두 개를 교차 대기하는가" — futex syscall 자체를 처음부터 추적
+
+strace -f -e trace=futex (deadlock-futex-syscalls.log 참고)로 확인: 로그의
+"WAITING...BLOCKED" 시각(02:50:26,167)과 1ms 오차로, 두 스레드(TID 107230/107231)가
+서로 다른 futex 주소에 각각 새로 진입해 그대로 영구 정지:
+
+  107230  futex(0x407050d0, FUTEX_WAIT_BITSET_PRIVATE|FUTEX_CLOCK_REALTIME, ...) <unfinished ...>
+  107231  futex(0x4070e260, FUTEX_WAIT_BITSET_PRIVATE|FUTEX_CLOCK_REALTIME, ...) <unfinished ...>
+
+두 주소가 다르다(0x407050d0 ≠ 0x4070e260) — 단일 더미 대기가 아니라 서로 다른 락
+객체 두 개가 실재하며, 각 스레드가 서로 다른 객체를 붙들고 있다는 뜻이다. 이 두
+syscall 이후 strace 로그가 완전히 정지(5초 이상 새 syscall 0개)했고, wchan도 계속
+futex_do_wait로 남아있어 진짜 영구 정지임이 재확인된다.
+
+## 결론
+
+futex_do_wait(커널 사실, sleep과 구분됨) + 서로 다른 futex 주소 두 개(로그의
+"서로 다른 락을 교차 대기" 주장과 구조적으로 일치) + 5초 이상 상태 불변(영구성)
+세 가지가 모두 합쳐져야 "진짜 데드락"이라 부를 수 있는데, 셋 다 확인됐다.

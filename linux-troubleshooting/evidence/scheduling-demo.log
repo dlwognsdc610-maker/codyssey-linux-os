@@ -1,0 +1,38 @@
+MEMORY_LIMIT>256(Healthy 시나리오) 부팅 시 항상 등장하는 고정 데모 시퀀스.
+재현 2회(01:48:39, 01:53:17) 모두 완전히 동일한 타이밍·순서로 재현됨.
+
+2026-07-18 01:53:17,967 [INFO] [Scheduler] Task Scheduler Initialized.
+2026-07-18 01:53:17,967 [INFO] [Scheduler] Registered Tasks: ['Thread-A', 'Thread-B', 'Thread-C']
+2026-07-18 01:53:17,967 [INFO] [Scheduler] Starting task execution...
+2026-07-18 01:53:17,967 [INFO] [Thread-A] Task Started. Calculating... (20%)
+2026-07-18 01:53:18,018 [INFO] [Thread-A] Calculating... (40%)
+2026-07-18 01:53:18,068 [INFO] [Thread-A] Preempted. Progress saved at (40%)
+2026-07-18 01:53:18,118 [INFO] [Thread-B] Task Started. Calculating... (20%)
+2026-07-18 01:53:18,169 [INFO] [Thread-B] Calculating... (40%)
+2026-07-18 01:53:18,220 [INFO] [Thread-B] Preempted. Progress saved at (40%)
+2026-07-18 01:53:18,270 [INFO] [Thread-C] Task Started. Calculating... (20%)
+2026-07-18 01:53:18,321 [INFO] [Thread-C] Calculating... (40%)
+2026-07-18 01:53:18,371 [INFO] [Thread-C] Preempted. Progress saved at (40%)
+2026-07-18 01:53:18,421 [INFO] [Thread-A] Resumed. Calculating... (60%)
+2026-07-18 01:53:18,472 [INFO] [Thread-A] Calculating... (80%)
+2026-07-18 01:53:18,522 [INFO] [Thread-A] Preempted. Progress saved at (80%)
+2026-07-18 01:53:18,573 [INFO] [Thread-B] Resumed. Calculating... (60%)
+2026-07-18 01:53:18,623 [INFO] [Thread-B] Calculating... (80%)
+2026-07-18 01:53:18,674 [INFO] [Thread-B] Preempted. Progress saved at (80%)
+2026-07-18 01:53:18,724 [INFO] [Thread-C] Resumed. Calculating... (60%)
+2026-07-18 01:53:18,775 [INFO] [Thread-C] Calculating... (80%)
+2026-07-18 01:53:18,825 [INFO] [Thread-C] Preempted. Progress saved at (80%)
+2026-07-18 01:53:18,876 [INFO] [Thread-A] Resumed. Calculating... (100%)
+2026-07-18 01:53:18,926 [INFO] [Thread-B] Resumed. Calculating... (100%)
+2026-07-18 01:53:18,977 [INFO] [Thread-C] Resumed. Calculating... (100%)
+2026-07-18 01:53:19,027 [INFO] [Scheduler] All tasks completed.
+
+## 타이밍 분석 (전체 재현 2회, 완전 동일)
+
+- 각 "작업 단위"(Started/Calculating/Preempted/Resumed) 사이 간격이 정확히 50~51ms로 고정.
+- A(20→40, preempt) → B(20→40, preempt) → C(20→40, preempt) → A(resume 60→80, preempt)
+  → B(resume 60→80, preempt) → C(resume 60→80, preempt) → A(resume 100) → B(resume 100)
+  → C(resume 100) → 종료.
+- 한 스레드가 20%(=1 slice) 진행할 때마다 반드시 다음 스레드로 넘어간다 — 특정 스레드가
+  연속 두 slice를 몰아서 갖거나, 우선순위가 있는 것처럼 특정 스레드가 더 자주/길게
+  실행되는 패턴이 없다. A/B/C가 완전히 균등하게 slice를 나눠 갖는다.

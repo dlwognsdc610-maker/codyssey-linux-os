@@ -1,0 +1,17 @@
+CPU_MAX_OCCUPY=100 strace(-f -tt -e trace=network,exit,exit_group,kill,tgkill,rt_sigaction,clone,wait4).
+
+100520 01:58:10.253866 rt_sigaction(SIGRT_6, {sa_handler=SIG_DFL, ...}, ...) = 0
+... (SIGRT_7 ~ SIGRT_32까지 전부 SIG_DFL로 리셋, Python 인터프리터 종료 시퀀스로 보임)
+100520 01:58:10.257503 tgkill(100520, 100520, SIGTERM) = 0
+100520 01:58:10.257532 --- SIGTERM {si_signo=SIGTERM, si_code=SI_TKILL, si_pid=100520, si_uid=1000} ---
+100520 01:58:10.257670 +++ killed by SIGTERM +++
+
+앱 로그 대응:
+2026-07-18 01:58:10,149 [INFO] [CpuWorker] Current Load: 50.85%
+2026-07-18 01:58:10,250 [CRITICAL] [CpuWorker] CPU Threshold Violated! (50.85%).
+  → 7ms 뒤 자기 자신에게 tgkill(SIGTERM). 프로세스는 즉시 종료, 포트 해제 확인됨.
+
+해석: OOM 케이스(evidence/oom-selfkill-strace.log)와 같은 자기지향 패턴(호출자==대상)이지만
+신호가 다르다 — 여긴 SIGTERM(캐치 가능·정상 종료 경로), OOM은 SIGKILL(캐치 불가).
+이는 실제 리눅스에서 "Watchdog가 우아하게 SIGTERM으로 정리 기회를 주는 것"과
+"커널 OOM killer가 SIGKILL로 무조건 뜯어가는 것"의 실제 차이를 정확히 흉내낸 설계다.

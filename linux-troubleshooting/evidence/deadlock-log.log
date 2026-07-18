@@ -1,0 +1,26 @@
+MULTI_THREAD_ENABLE=true, MEMORY_LIMIT=512, CPU_MAX_OCCUPY=50.
+
+2026-07-18 02:50:19,127 [WARNING] [AgentWorker] Initializing concurrent transaction processors...
+2026-07-18 02:50:19,127 [WARNING] [System] CAUTION: Strict resource locking is enabled.
+2026-07-18 02:50:24,153 [INFO] [Worker-Thread-1] Process Started. Attempting to lock [Shared_Memory_A]...
+2026-07-18 02:50:24,153 [INFO] [AgentWorker][Worker-Thread-2] Process Started. Attempting to lock [Socket_Pool_B]...
+2026-07-18 02:50:24,154 [INFO] [AgentWorker] Waiting for worker threads to complete transactions...
+2026-07-18 02:50:24,154 [INFO] [AgentWorker][Worker-Thread-1] LOCK ACQUIRED: [Shared_Memory_A]. (Holding...)
+2026-07-18 02:50:24,155 [INFO] [AgentWorker][Worker-Thread-2] LOCK ACQUIRED: [Socket_Pool_B]. (Holding...)
+2026-07-18 02:50:24,156 [INFO] [AgentWorker][Worker-Thread-1] Processing critical data in Memory A...
+2026-07-18 02:50:24,156 [INFO] [AgentWorker][Worker-Thread-2] Establishing network connections in Pool B...
+2026-07-18 02:50:26,166 [INFO] [AgentWorker][Worker-Thread-1] Need resource [Socket_Pool_B] to finish job.
+2026-07-18 02:50:26,166 [INFO] [AgentWorker][Worker-Thread-2] Need resource [Shared_Memory_A] to write logs.
+2026-07-18 02:50:26,167 [INFO] [AgentWorker][Worker-Thread-1] WAITING for [Socket_Pool_B]... (Status: BLOCKED)
+2026-07-18 02:50:26,167 [INFO] [AgentWorker][Worker-Thread-2] WAITING for [Shared_Memory_A]... (Status: BLOCKED)
+
+(이후 40초 timeout까지 로그 추가 없음 — 무응답 확정)
+
+## ps -ef | grep 확인 (PID 존재)
+
+ljh  103179  103177  0  02:27 ?  00:00:00 ./agent-leak-app-x86
+
+## MULTI_THREAD_ENABLE=false 대조군
+
+이 세션의 다른 모든 실행(OOM·CPU 케이스 전부 MULTI_THREAD_ENABLE=false로 진행)에서
+단 한 번도 데드락이 발생하지 않았다 — 정상 종료(크래시든 생존이든) 전부 확인됨.

@@ -1,0 +1,22 @@
+## CPU Watchdog kill-threshold — black-box boundary sweep (2026-07-18)
+## 방법: CPU_MAX_OCCUPY만 바꿔 생존/사망 관측. 디컴파일/정적분석 없음.
+## 고정: MEMORY_LIMIT=512, MULTI_THREAD_ENABLE=false (CPU축만 격리).
+
+CAP   VERDICT         KILL_LOAD   PEAK    TTD_s
+49    SURVIVED        -           49.00   -
+50    SURVIVED        -           50.00   -
+51    DIED(SIGTERM)   51.00       51.00   36.4
+55    DIED(SIGTERM)   55.00       55.00   27.0
+60    DIED(SIGTERM)   53.06       -       33.3
+100   DIED(SIGTERM)   54.61       -       36.4
+
+## 생존 경계 = CPU_MAX_OCCUPY <= 50.  킬라인은 load>50 (고정, 노브와 무관).
+## 앞선 자유 실행들의 killing load(50.85·56.27·58.95)까지 합쳐 min=50.85 → T ∈ [50.00, 50.85).
+
+## 앱 자기신고 — 부팅 [ CPU ] 리소스체크 플래그가 정확히 50/51에서 뒤집힘:
+cap=10   ->  [ CPU ] Limit: 10%   [ OK ]
+cap=49   ->  [ CPU ] Limit: 49%   [ OK ]
+cap=50   ->  [ CPU ] Limit: 50%   [ OK ]
+cap=51   ->  [ CPU ] Limit: 51%   [ WARNING: Recommend Under 50% ]
+cap=55   ->  [ CPU ] Limit: 55%   [ WARNING: Recommend Under 50% ]
+cap=100  ->  [ CPU ] Limit: 100%  [ WARNING: Recommend Under 50% ]

@@ -1,0 +1,16 @@
+MEMORY_LIMIT 254~257을 5초씩 부팅해 시나리오 스위치 지점을 스캔한 결과
+(2026-07-18 02:17, CPU_MAX_OCCUPY=50, MULTI_THREAD_ENABLE=false 고정):
+
+LIMIT=254 -> (scenario 없음/crash형)  [권장미달경고]
+LIMIT=255 -> (scenario 없음/crash형)  [권장미달경고]
+LIMIT=256 -> (scenario 없음/crash형)  [권장미달경고]
+LIMIT=257 -> Scenario Selected: [Healthy System Monitoring]
+
+254~256 부팅 배너: " [ MEMORY ] Limit: NNNMB  [ WARNING: Recommend Over 256MB ] "
+257 부팅 배너:     " [ MEMORY ] Limit: 257MB  [ OK ] " + "Scenario Selected: [Healthy System Monitoring]"
+                   + Thread-A/B/C 스케줄러 데모 실행 + CpuWorker 동반 기동
+
+해석: 스위치는 정확히 MEMORY_LIMIT > 256 / <= 256의 단일 정수 경계에서 결정된다.
+254~256은 Scenario Selected 라인 자체가 없고 스케줄러 데모도 없이 곧장
+MemoryWorker 성장 → CRITICAL로 직행. 257부터는 Healthy 시나리오 전체(데모+CpuWorker
+동반+cleanup 가능)로 전환된다.

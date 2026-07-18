@@ -1,0 +1,34 @@
+B1-1에서 만든 monitor.sh(포트 기반 헬스체크·CPU/MEM% 실측)를 이 앱에도 그대로 재사용
+(AGENT_PORT=15034 동일이라 그대로 동작).
+
+## MEMORY_LIMIT=100 (크래시 케이스)
+
+--- 1회차 (성장 초반) ---
+===== HEALTH CHECK =====
+[OK] agent-app running (PID=103475), port 15034 LISTEN
+===== RESOURCE MONITORING =====
+PID:103475  CPU:0.0%  MEM:0.3%  DISK_USED:66%
+
+--- 2회차 (성장 중) ---
+===== HEALTH CHECK =====
+[OK] agent-app running (PID=103475), port 15034 LISTEN
+===== RESOURCE MONITORING =====
+PID:103475  CPU:0.0%  MEM:0.4%  DISK_USED:66%
+
+--- 3회차 (CRITICAL 크래시 이후) ---
+===== HEALTH CHECK =====
+[FAIL] agent-app health check failed (PID=none, port 15034 LISTEN=0)
+
+## MEMORY_LIMIT=512 (생존 케이스)
+
+--- cleanup 이전 ---
+===== HEALTH CHECK =====
+[OK] agent-app running (PID=103651), port 15034 LISTEN
+===== RESOURCE MONITORING =====
+PID:103651  CPU:0.0%  MEM:1.0%  DISK_USED:66%
+
+--- cleanup 이후에도 생존 (100MB 케이스였다면 이미 죽었을 시점) ---
+===== HEALTH CHECK =====
+[OK] agent-app running (PID=103651), port 15034 LISTEN
+===== RESOURCE MONITORING =====
+PID:103651  CPU:0.0%  MEM:0.6%  DISK_USED:66%

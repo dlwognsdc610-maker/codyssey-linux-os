@@ -1,0 +1,26 @@
+strace -f -tt -e trace=futex ./agent-leak-app-x86  (MULTI_THREAD_ENABLE=true 부팅부터 추적)
+
+## 배경 잡음 — CPython GIL 주고받기 (스레드 시작 직후, 정상 동작)
+
+같은 주소(0x762077990a68/a6c/a70)를 여러 스레드가 반복적으로 WAIT/WAKE — 이건
+Python 인터프리터의 GIL(Global Interpreter Lock) 핸드오프 메커니즘이다. 애플리케이션
+락과 무관하게 스레드가 하나라도 있으면 항상 이렇게 바쁘게 움직인다(수백 줄 반복,
+생략).
+
+## 결정적 순간 — 로그의 "WAITING...BLOCKED" 시각(02:50:26,167)과 일치
+
+107230 02:50:26.168000 futex(0x407050d0, FUTEX_WAIT_BITSET_PRIVATE|FUTEX_CLOCK_REALTIME, 0, NULL, FUTEX_BITSET_MATCH_ANY <unfinished ...>
+107231 02:50:26.168106 futex(0x4070e260, FUTEX_WAIT_BITSET_PRIVATE|FUTEX_CLOCK_REALTIME, 0, NULL, FUTEX_BITSET_MATCH_ANY
+
+이 두 줄 이후 strace 출력이 완전히 멈췄다(추가 5초 관찰, 새 syscall 0개) —
+GIL 핸드오프 잡음(위 구간)과 달리 이 두 호출은 두 번 다시 안 돌아온다.
+
+## 왜 이게 "GIL 잡음"이 아니라 "진짜 애플리케이션 락 대기"인가
+
+1. 사용된 futex 주소가 GIL 핸드오프 주소(0x7620...)와 다르다(0x407050d0, 0x4070e260).
+2. GIL 핸드오프는 WAIT 직후 곧바로 WAKE가 따라와 초당 수백 번 반복되는데, 이 두 호출은
+   WAKE가 한 번도 따라오지 않고 그대로 멈춘다.
+3. 두 스레드가 서로 다른 주소를 각자 새로 얻었다 — 하나의 공유 더미 대기가 아니라
+   두 개의 별개 락 객체가 실재한다는 뜻이다.
+4. 발생 시각이 앱 로그의 "WAITING for [상대방 자원]... BLOCKED" 두 줄과 1ms 이내로
+   정확히 일치한다.

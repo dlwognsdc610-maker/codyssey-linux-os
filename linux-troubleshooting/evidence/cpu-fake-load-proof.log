@@ -1,0 +1,41 @@
+## 앱 자체 로그 — "Current Load"가 계속 상승, 임계치에서 CRITICAL
+
+2026-07-18 02:37:32,784 [INFO] [CpuWorker] Started. Maximum CPU Limit: 100%
+2026-07-18 02:37:32,784 [INFO] [CpuWorker] Current Load: 5.00%
+2026-07-18 02:37:35,899 [INFO] [CpuWorker] Current Load: 14.63%
+2026-07-18 02:37:39,010 [INFO] [CpuWorker] Current Load: 16.06%
+2026-07-18 02:37:42,125 [INFO] [CpuWorker] Current Load: 19.76%
+2026-07-18 02:37:45,240 [INFO] [CpuWorker] Current Load: 25.50%
+2026-07-18 02:37:48,352 [INFO] [CpuWorker] Current Load: 29.83%
+2026-07-18 02:37:51,467 [INFO] [CpuWorker] Current Load: 30.19%
+2026-07-18 02:37:54,578 [INFO] [CpuWorker] Current Load: 38.23%
+2026-07-18 02:37:57,693 [INFO] [CpuWorker] Current Load: 39.20%
+2026-07-18 02:38:00,808 [INFO] [CpuWorker] Current Load: 49.12%
+2026-07-18 02:38:03,923 [INFO] [CpuWorker] Current Load: 58.95%
+2026-07-18 02:38:04,023 [CRITICAL] [CpuWorker] CPU Threshold Violated! (58.949999999999996%).
+
+## 같은 순간, /proc/<pid>/stat의 utime+stime을 직접 1초 간격으로 델타 낸 실측치
+## (getconf CLK_TCK 기준 jiffies → %, monitor.sh/top과 같은 원본 커널 카운터)
+
+02:37:45  utime+stime=15  (지난 1초간 CPU=0.0%)   ↔ 앱 주장: Load 25.50%
+02:37:48  utime+stime=18  (지난 1초간 CPU=3.0%)    ↔ 앱 주장: Load 29.83%
+02:37:51  utime+stime=18  (지난 1초간 CPU=0.0%)    ↔ 앱 주장: Load 30.19%
+02:37:54  utime+stime=22  (지난 1초간 CPU=4.0%)    ↔ 앱 주장: Load 38.23%
+
+## 같은 현상, 완전히 별개 실행에서 plain `top -b -n1 -p <pid>`로 재확인 (2026-07-18 02:42:17)
+
+top - 02:42:17 up  9:43,  1 user,  load average: 0.24, 0.34, 0.41
+Tasks:   1 total,   0 running,   1 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  4.1 us,  2.5 sy,  0.0 ni, 39.3 id, 54.1 wa,  0.0 hi,  0.0 si,  0.0 st
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+ 104579 ljh       30  10   38032  18180   9900 S   0.0   0.1   0:00.16 agent-l+
+
+같은 순간(02:42:17) 앱 로그: "[CpuWorker] Current Load: 33.28%" — top은 %CPU 0.0.
+
+## 해석
+
+세 가지 서로 독립된 측정 방법(monitor.sh, 직접 jiffies 델타, plain top)이 전부
+"실제 CPU 사용률은 0~4%대에 머문다"로 일치한다. 앱이 로그에 찍는 "Current Load %"는
+실제 프로세스 CPU 사용량과 무관한 자체 카운터다 — 진짜로 CPU를 점유하는 워크로드를
+실행하는 게 아니라, 숫자만 올리다가 임계치에서 자살한다. 메모리 케이스(실제 RSS가
+진짜로 오른 것)와 달리, 이 케이스는 관측 가능한 "현상" 자체가 실제로 발생하지 않는다.
